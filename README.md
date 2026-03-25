@@ -1,72 +1,73 @@
-# Multi-Agent Frameworks
+# Multi-Agent AI Frameworks
 
-#1 LangChain (Python and TS)
-#2 LangGraph (Python and TS)
-#3 Autogen (Python)
-#4 CrewAI (Python)
-#5 Agno (Python)
+This repository contains examples for modern multi-agent and generative AI frameworks in Python (and some TypeScript). The goal is to help developers compare approaches, run experiments, and build reusable patterns.
 
-# Traditional AI
+## 1. Core Multi-Agent Frameworks
 
-1. recommendation
-2. classification
-3. prediction
-4. obj recognition
+- LangChain (Python, TypeScript)
+- LangGraph (Python, TypeScript)
+- Autogen (Python)
+- CrewAI (Python)
+- Agno (Python)
 
-- deterministic ai systems
+## 2. Traditional AI Use Cases
 
-## Gen AI
+Common deterministic models and pipelines:
 
-Some LLMs
+1. Recommendation systems
+2. Classification
+3. Prediction (regression and forecasting)
+4. Object recognition
+
+> These examples showcase structured machine learning workflows, pre-ML feature engineering, and deterministic inference paths.
+
+## 3. Generative AI and LLMs
+
+Key large language models covered or referenced:
+
+1. OpenAI ChatGPT
+2. Anthropic Claude
+3. Google Gemini
+4. xAI Grok
+5. Deepseek
+6. Alibaba Qwen
+7. Mistral
+8. Meta Llama
+
+### Recommended Google Gemini variants
+
+- `google_genai:gemini-3.1-pro-preview` (best quality, lower latency)
+- `google_genai:gemini-3.1-flash-lite-preview` (lightweight + speed)
+- `google_genai:gemini-3-flash-preview` (balanced performance)
+- `google_genai:gemini-2.5-flash` (stable production)
+- `google_genai:gemini-2.5-flash-lite` (cost-efficient)
+- `google_genai:gemini-2.5-flash-preview-09-2025` (experimental)
+
+## 4. Agent Tooling Guidelines
+
+In agent custom tools, follow these rules:
+
+- Implement tools as callable functions
+- Include a concise `name`
+- Add a clear `description`
+- Return structured data (JSON-friendly)
+- Pair tools with agent definitions
+- One agent can share multiple tools
 
 ---
 
-    1. OpenAI ChatGPT
-    2. Anthropic Claude
-    3. Google Gemini
-    4. xAI Grok
-    5. Deepseek
-    6. Alibaba Qwen
-    7. Mistral
-    8. Meta Llama
+## Getting Started
 
-=====
+1. Set up a Python virtual environment (e.g., `python -m venv .venv`)
+2. Activate it (macOS / Linux: `source .venv/bin/activate`)
+3. Install dependencies: `pip install -r requirements.txt` (if provided)
+4. Run examples: `python example1.py`, etc.
 
-Link: https://labs.stackroute.in/
+## Contributing
 
-Username: T91-labuser029@stackroute.in
-
-Password: xjIYC@942
-
-GCP cloud lab details:-
-
-Link: https://labs.stackroute.in/
-
-Username: demo_agenticaiuser
-Password: Agentic@\_1ED2
-
-===
-
-# Different Gemini models to switch to...
-
-google_genai:gemini-3.1-pro-preview [1-5]
-google_genai:gemini-3.1-flash-lite-preview [6-10]
-google_genai:gemini-3-flash-preview [11-15]
-google_genai:gemini-2.5-flash [16-20]
-google_genai:gemini-2.5-flash-lite [21-25]
-google_genai:gemini-2.5-flash-preview-09-2025 [26-30]
-
-===
-
-# Tools
-
-====
-
-- are functions
-- must have a name
-- must have a description
-- must return data
-- tools must be associated with agents
-- you can associate many tools with agents
+- Add or update examples with reproducible code
+- Add notes for API versions and required keys
+- Keep model variants and prompts clearly documented
+- Use comments to explain multi-agent coordination logic
 
 ============
