@@ -1,139 +1,97 @@
-# hierarchical_agents.py
-# Hierarchical Multi-Agent System — Pure LangChain LCEL (no LangGraph, no tool-wrapping)
-
-from dotenv import load_dotenv
-from typing import Literal
+# getting inputs from user
+import os
+from langchain.agents import create_agent
+from langchain_core.tools import tool   
 from pydantic import BaseModel, Field
+from typing import List
+from dotenv import load_dotenv
+from tavily import TavilyClient
 
-from langchain_openai import ChatOpenAI
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.output_parsers import StrOutputParser
-from langchain_core.runnables import RunnableLambda
 
 load_dotenv()
+client = TavilyClient(os.getenv("TAVILY_API_KEY"))
 
 
-# ============================================================
-# Model
-# ============================================================
-model = ChatOpenAI(
-    model="gpt-4o-mini",
-    temperature=0,
-)
+# ── 1. Define structured output schema ──────────────────────────────────────
+class NewsArticle(BaseModel):
+    """A single news article."""
+    title: str = Field(description="Title of the article")
+    source: str = Field(description="Publisher or source name")
+    summary: str = Field(description="Brief summary of the article")
+    url: str = Field(description="URL of the article, empty string if unavailable")
 
 
-# ============================================================
-# Routing Schema  (structured output — not a tool call)
-# ============================================================
-class RouteDecision(BaseModel):
-    """Supervisor's routing decision."""
-    next: Literal["research", "write", "finish"] = Field(
-        description="Which agent to invoke next, or 'finish' if done."
+class AINewsResponse(BaseModel):
+    """Structured response for AI news queries."""
+    topic: str = Field(description="The specific topic of AI news covered")
+    articles: List[NewsArticle] = Field(description="List of relevant articles found")
+    overall_summary: str = Field(description="High-level summary of current AI news")
+
+
+# ── 2. Decorate tools with @tool ─────────────────────────────────────────────
+@tool
+def get_weather_tool(city: str) -> str:
+    """A simple tool that fetches weather information for a given city."""
+    print(f"Fetching weather information for {city}...")
+    api_key = os.getenv("OPENWEATHER_API_KEY")
+    api_url = os.getenv("OPENWEATHER_API_URL")
+    return f"In {city} temperature is 25°C."
+
+
+@tool
+def websearch_tool(query: str) -> str:
+    """Use this for general web search queries."""
+    print(f"Performing web search for {query}...")
+    response = client.search(
+        query=query,
+        search_depth="advanced"
     )
-    instruction: str = Field(
-        description="Specific instruction to pass to the next agent."
+    return response
+
+
+# ── 3. Get topic input from user ──────────────────────────────────────────────
+def main():
+    topic = input("\nEnter a topic to search news about: ").strip()
+
+    if not topic:
+        print("No topic provided. Exiting.")
+        return
+
+    print(f"\n🔍 Searching for news on: '{topic}'...\n")
+
+    # ── 4. Pass response_format to create_agent ──────────────────────────────
+    general_purpose_agent = create_agent(
+        model="google_genai:gemini-3.1-pro-preview",
+        tools=[get_weather_tool, websearch_tool],
+        response_format=AINewsResponse,
+        system_prompt="""You are a helpful assistant.
+        You are given two tools - get_weather_tool which fetches weather information for a given city,
+        and websearch_tool which performs general web searches.
+        If the tool outputs are not sufficient to answer the query,
+        say you are unable to answer instead of making up a response.
+        """
     )
 
+    response = general_purpose_agent.invoke(
+        {
+            "messages": [
+                {"role": "user", "content": f"Tell me about latest news on: {topic}"}
+            ]
+        }
+    )
 
-# ============================================================
-# Sub-Agent Chains  (pure LCEL: prompt | model | parser)
-# ============================================================
-research_chain = (
-    ChatPromptTemplate.from_messages([
-        ("system", "You are a research assistant. Provide detailed, factual information on any topic."),
-        ("human", "{instruction}"),
-    ])
-    | model
-    | StrOutputParser()
-)
+    # ── 5. Access structured output ───────────────────────────────────────────
+    news: AINewsResponse = response["structured_response"]
 
-writing_chain = (
-    ChatPromptTemplate.from_messages([
-        ("system", "You are a professional writer. Create clear, concise, and engaging content."),
-        ("human", "{instruction}\n\nResearch data to use:\n{research_output}"),
-    ])
-    | model
-    | StrOutputParser()
-)
+    print(f"Topic: {news.topic}")
+    print(f"\nOverall Summary:\n{news.overall_summary}")
+    print(f"\nArticles ({len(news.articles)}):")
+    for article in news.articles:
+        print(f"\n  [{article.source}] {article.title}")
+        print(f"  {article.summary}")
+        if article.url:
+            print(f"  🔗 {article.url}")
 
 
-# ============================================================
-# Supervisor Chain  (structured output for routing)
-# ============================================================
-supervisor_chain = (
-    ChatPromptTemplate.from_messages([
-        ("system", (
-            "You are a supervisor coordinating research and writing agents.\n"
-            "Routing rules:\n"
-            "  - 'research' → if research has NOT been done yet\n"
-            "  - 'write'    → if research is done but writing is NOT done\n"
-            "  - 'finish'   → if both research and writing are complete\n"
-            "Always provide a specific, detailed instruction for the next agent."
-        )),
-        ("human", "{context}"),
-    ])
-    | model.with_structured_output(RouteDecision)
-)
-
-
-# ============================================================
-# Orchestrator  (while loop handles the cycle — LCEL is DAG-only)
-# ============================================================
-def orchestrate(inputs: dict) -> str:
-    user_task = inputs["task"]
-    state = {
-        "research_output": None,
-        "writing_output": None,
-    }
-
-    print("\n========= 0. Orchestration started ============")
-
-    while True:
-        # Build context for supervisor
-        context = f"""
-User task: {user_task}
-
-Research completed: {"Yes" if state["research_output"] else "No"}
-Writing completed:  {"Yes" if state["writing_output"] else "No"}
-{f"Research gathered:{chr(10)}{state['research_output']}" if state["research_output"] else ""}
-""".strip()
-
-        # Supervisor decides next step via structured output (NOT tool calling)
-        decision: RouteDecision = supervisor_chain.invoke({"context": context})
-        print(f"\n========= Supervisor → '{decision.next}' ============")
-        print(f"Instruction: {decision.instruction[:80]}...")
-
-        if decision.next == "research":
-            print("\n========= 1. Research Agent working ============")
-            state["research_output"] = research_chain.invoke({
-                "instruction": decision.instruction,
-            })
-            print("Research Agent done ✓")
-
-        elif decision.next == "write":
-            print("\n========= 2. Writing Agent working ============")
-            state["writing_output"] = writing_chain.invoke({
-                "instruction": decision.instruction,
-                "research_output": state["research_output"] or "",
-            })
-            print("Writing Agent done ✓")
-
-        elif decision.next == "finish":
-            print("\n========= Done ✓ ============")
-            return state["writing_output"] or state["research_output"] or "No output generated."
-
-
-# Wrap as a standard LCEL Runnable → supports .invoke(), .stream(), .batch()
-hierarchical_agent = RunnableLambda(orchestrate)
-
-
-# ============================================================
-# Run
-# ============================================================
 if __name__ == "__main__":
-    result = hierarchical_agent.invoke({
-        "task": "Research the benefits of Protein and write a 2-paragraph summary."
-    })
-
-    print("\n=== Final Response ===")
-    print(result)
+    main()
